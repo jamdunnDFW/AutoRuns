@@ -3,6 +3,9 @@
 # Provider registry for extensible external artifact providers
 $script:PSAutorunArtifactProviders = [ordered]@{}
 
+# Path to this module's manifest for use in parallel runspaces
+$script:PSAutorunModuleManifestPath = Join-Path -Path $PSScriptRoot -ChildPath 'AutoRuns.psd1'
+
 function Register-PSAutorunArtifactProvider {
     [CmdletBinding()]
     param(
@@ -34,6 +37,40 @@ function Get-RegistryDefaultValueCached {
         return $v
     } catch {
         return $null
+    }
+}
+
+function Invoke-PSAutorunCategoriesParallel {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string[]]$Categories,
+        [string]$User
+    )
+    $min = 1
+    $max = [System.Math]::Max([Environment]::ProcessorCount, 2)
+    $pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool($min, $max)
+    $pool.Open()
+    try {
+        $jobs = @()
+        foreach ($cat in $Categories) {
+            $ps = [System.Management.Automation.PowerShell]::Create()
+            $ps.RunspacePool = $pool
+            $cmd = "Import-Module '$script:PSAutorunModuleManifestPath' -Force; Get-PSAutorun -Raw -$cat"
+            if ($User) { $cmd += " -User '$User'" }
+            [void]$ps.AddScript($cmd)
+            $handle = $ps.BeginInvoke()
+            $jobs += [pscustomobject]@{ PS = $ps; Handle = $handle }
+        }
+        $results = New-Object System.Collections.ArrayList
+        foreach ($job in $jobs) {
+            $output = $job.PS.EndInvoke($job.Handle)
+            if ($output) { [void]$results.AddRange($output) }
+            $job.PS.Dispose()
+        }
+        ,$results
+    } finally {
+        $pool.Close()
+        $pool.Dispose()
     }
 }
 
@@ -2914,8 +2951,20 @@ Process {
                  $null = $PSBoundParameters.Remove('User')
              }
                          $PSBoundParameters.Add('User',$Users)
-            Get-PSRawAutoRun @PSBoundParameters |
-            Get-PSPrettyAutorun |
+            $selectedCats = @()
+            foreach ($k in 'BootExecute','AppinitDLLs','ExplorerAddons','ImageHijacks','InternetExplorerAddons','KnownDLLs','Logon','Winsock','Codecs','OfficeAddins','PrintMonitorDLLs','LSAsecurityProviders','ServicesAndDrivers','ScheduledTasks','Winlogon','WMI','PSProfiles') {
+                if ($PSBoundParameters.ContainsKey($k) -and $PSBoundParameters[$k]) { $selectedCats += $k }
+            }
+            if (-not $selectedCats -and $PSBoundParameters.ContainsKey('All')) {
+                $selectedCats = @('BootExecute','AppinitDLLs','ExplorerAddons','ImageHijacks','InternetExplorerAddons','KnownDLLs','Logon','Winsock','Codecs','OfficeAddins','PrintMonitorDLLs','LSAsecurityProviders','ServicesAndDrivers','ScheduledTasks','Winlogon','WMI','PSProfiles')
+            }
+            if ($selectedCats.Count -gt 1) {
+                Invoke-PSAutorunCategoriesParallel -Categories $selectedCats -User $($PSBoundParameters['User']) |
+                Get-PSPrettyAutorun |
+            } else {
+                Get-PSRawAutoRun @PSBoundParameters |
+                Get-PSPrettyAutorun |
+            }
              Add-PSAutoRunExtendedInfo |
              Add-PSAutoRunHash -ShowFileHash:$GetHash |
              Add-PSAutoRunAuthentiCodeSignature -VerifyDigitalSignature:$GetSig

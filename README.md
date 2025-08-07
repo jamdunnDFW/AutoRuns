@@ -106,6 +106,10 @@ Get-PSAutorun -Artifacts MyCustom
   - Baseline serialization now uses ISO 8601 (yyyy-MM-dd HH:mm:ss.fff) in comments for DateTime values.
   - Runtime objects still expose DateTime types (e.g., LastWriteTime); format as needed when exporting.
 
+- Parallel execution:
+  - When you request multiple categories (e.g., `-Logon -WMI -ExplorerAddons`) or use `-All`, the module uses a runspace pool to execute category scans in parallel for better performance.
+  - Single-category calls behave as before.
+
 #### New-AutoRunsBaseLine
 
 ```powershell
