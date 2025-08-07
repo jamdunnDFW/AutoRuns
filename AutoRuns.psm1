@@ -3060,7 +3060,7 @@ Process {
                     }
                     {$_ -is [DateTime]} {
                         Write-Verbose -Message "Its value $($Item.$p) is a DateTime"
-                        '  {0}=[datetime]{1} # {2}' -f $p,$Item.$p.Ticks,$Item.$p.ToString('u')
+                        '  {0}=[datetime]{1} # {2}' -f $p,$Item.$p.Ticks,$Item.$p.ToString('yyyy-MM-dd HH:mm:ss.fff')
                         break
                     }
                     {$_ -is [bool]} {
