@@ -1,4 +1,41 @@
-﻿#Requires -Version 4.0
+#Requires -Version 4.0
+
+# Provider registry for extensible external artifact providers
+$script:PSAutorunArtifactProviders = [ordered]@{}
+
+function Register-PSAutorunArtifactProvider {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][scriptblock]$ScriptBlock
+    )
+    $script:PSAutorunArtifactProviders[$Name] = $ScriptBlock
+}
+
+function Get-PSAutorunArtifactProviderNames {
+    [CmdletBinding()]
+    param()
+    $script:PSAutorunArtifactProviders.Keys
+}
+
+# Lightweight cache for registry default value lookups to reduce repeated IO
+$script:__AR_DefaultValueCache = @{}
+function Get-RegistryDefaultValueCached {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path
+    )
+    if ($script:__AR_DefaultValueCache.ContainsKey($Path)) {
+        return $script:__AR_DefaultValueCache[$Path]
+    }
+    try {
+        $v = (Get-ItemProperty -Path $Path -Name '(default)' -ErrorAction SilentlyContinue).'(default)'
+        $script:__AR_DefaultValueCache[$Path] = $v
+        return $v
+    } catch {
+        return $null
+    }
+}
 
 Function Get-PSAutorun {
 <#
@@ -64,7 +101,7 @@ Function Get-PSAutorun {
         Switch to gather artifacts from the PowerShell profiles category.
 
     .PARAMETER ShowFileHash
-        Switch to enable and display MD5, SHA1 and SHA2 file hashes.
+        Switch to enable and display MD5, SHA1 and SHA256 file hashes.
 
     .PARAMETER VerifyDigitalSignature
         Switch to report if a file is digitally signed with the built-in Get-AuthenticodeSignature cmdlet.
@@ -116,7 +153,9 @@ Function Get-PSAutorun {
         [Switch]$ShowFileHash,
 
         [Parameter(ParameterSetName='Pretty')]
-        [Switch]$VerifyDigitalSignature
+        [Switch]$VerifyDigitalSignature,
+
+        [string[]]$Artifacts
     )
 DynamicParam  {
 
@@ -510,12 +549,13 @@ Begin {
             [Switch]$ShowFileHash,
             [Switch]$VerifyDigitalSignature,
             [Switch]$Raw,
-            [PSObject]$User=$Users
+            [PSObject]$User=$Users,
+            [string[]]$Artifacts
 
         )
         Begin {
             ## Add 'All' if nothing else was supplied
-            $parametersToIgnore = ('ShowFileHash','VerifyDigitalSignature','User','Raw') +
+            $parametersToIgnore = ('ShowFileHash','VerifyDigitalSignature','User','Raw','Artifacts') +
                 [System.Management.Automation.PSCmdlet]::CommonParameters +
                 [System.Management.Automation.PSCmdlet]::OptionalCommonParameters
             if(($PSBoundParameters.Keys | Where-Object { $_ -notin $parametersToIgnore }).Count -eq 0)
@@ -1930,6 +1970,18 @@ Begin {
             }
         }
         End {
+            # Invoke external artifact providers if requested
+            if ($Artifacts -and $script:PSAutorunArtifactProviders.Count -gt 0) {
+                foreach ($name in $Artifacts) {
+                    if ($script:PSAutorunArtifactProviders.Contains($name)) {
+                        & $script:PSAutorunArtifactProviders[$name] -ArgumentList @{
+                            Users = $Users
+                            ShowFileHash = $ShowFileHash
+                            VerifyDigitalSignature = $VerifyDigitalSignature
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2847,28 +2899,28 @@ Process {
             Get-PSRawAutoRun @PSBoundParameters
             break
         }
-        'Pretty' {
-            if ($PSBoundParameters.ContainsKey('ShowFileHash')) {
-                $GetHash = $true
-            } else {
-                $GetHash = $false
-            }
-            if ($PSBoundParameters.ContainsKey('VerifyDigitalSignature')) {
-                $GetSig = $true
-            } else {
-                $GetSig = $false
-            }
-            if ($PSBoundParameters.ContainsKey('User')) {
-                $null = $PSBoundParameters.Remove('User')
-            }
-            $PSBoundParameters.Add('User',$Users)
+                 'Pretty' {
+             if ($PSBoundParameters.ContainsKey('ShowFileHash')) {
+                 $GetHash = $true
+             } else {
+                 $GetHash = $false
+             }
+             if ($PSBoundParameters.ContainsKey('VerifyDigitalSignature')) {
+                 $GetSig = $true
+             } else {
+                 $GetSig = $false
+             }
+             if ($PSBoundParameters.ContainsKey('User')) {
+                 $null = $PSBoundParameters.Remove('User')
+             }
+                         $PSBoundParameters.Add('User',$Users)
             Get-PSRawAutoRun @PSBoundParameters |
             Get-PSPrettyAutorun |
-            Add-PSAutoRunExtendedInfo |
-            Add-PSAutoRunHash -ShowFileHash:$GetHash |
-            Add-PSAutoRunAuthentiCodeSignature -VerifyDigitalSignature:$GetSig
-            break
-        }
+             Add-PSAutoRunExtendedInfo |
+             Add-PSAutoRunHash -ShowFileHash:$GetHash |
+             Add-PSAutoRunAuthentiCodeSignature -VerifyDigitalSignature:$GetSig
+             break
+         }
         default {}
     }
 }

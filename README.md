@@ -1,4 +1,4 @@
-﻿AutoRuns PowerShell Module
+AutoRuns PowerShell Module
 ==========================
 
 **AutoRuns module was designed to help do live incident response and enumerate autoruns artifacts that may be used by legitimate programs as well as malware to achieve persistence.**
@@ -82,9 +82,24 @@ Function        New-AutoRunsBaseLine                               14.0.2     Au
 # View the syntax of Get-PSAutorun
 Get-Command Get-PSAutorun -Syntax
 
-Get-PSAutorun [-All] [-BootExecute] [-AppinitDLLs] [-ExplorerAddons] [-ImageHijacks] [-InternetExplorerAddons] [-KnownDLLs] [-Logon] [-Winsock] [-Codecs] [-OfficeAddins] [-PrintMonitorDLLs] [-LSAsecurityProviders] [-ServicesAndDrivers] [-ScheduledTasks] [-Winlogon] [-WMI] [-PSProfiles] [-ShowFileHash] [-VerifyDigitalSignature] [-User <string>] [<CommonParameters>]
+Get-PSAutorun [-All] [-BootExecute] [-AppinitDLLs] [-ExplorerAddons] [-ImageHijacks] [-InternetExplorerAddons] [-KnownDLLs] [-Logon] [-Winsock] [-Codecs] [-OfficeAddins] [-PrintMonitorDLLs] [-LSAsecurityProviders] [-ServicesAndDrivers] [-ScheduledTasks] [-Winlogon] [-WMI] [-PSProfiles] [-ShowFileHash] [-VerifyDigitalSignature] [-User <string>] [-Artifacts <string[]>] [<CommonParameters>]
 
-Get-PSAutorun [-All] [-BootExecute] [-AppinitDLLs] [-ExplorerAddons] [-ImageHijacks] [-InternetExplorerAddons] [-KnownDLLs] [-Logon] [-Winsock] [-Codecs] [-OfficeAddins] [-PrintMonitorDLLs] [-LSAsecurityProviders] [-ServicesAndDrivers] [-ScheduledTasks] [-Winlogon] [-WMI] [-PSProfiles] [-Raw] [-User <string>] [<CommonParameters>]
+Get-PSAutorun [-All] [-BootExecute] [-AppinitDLLs] [-ExplorerAddons] [-ImageHijacks] [-InternetExplorerAddons] [-KnownDLLs] [-Logon] [-Winsock] [-Codecs] [-OfficeAddins] [-PrintMonitorDLLs] [-LSAsecurityProviders] [-ServicesAndDrivers] [-ScheduledTasks] [-Winlogon] [-WMI] [-PSProfiles] [-Raw] [-User <string>] [-Artifacts <string[]>] [<CommonParameters>]
+```
+
+Extension mechanism:
+
+- Register a provider:
+```powershell
+Register-PSAutorunArtifactProvider -Name MyCustom -ScriptBlock {
+    param($args)
+    # Return PSCustomObject entries with Path, Item, Value, Category
+    [pscustomobject]@{ Path='HKCU:\...'; Item='MyItem'; Value='...'; Category='Custom' }
+}
+```
+- Invoke with Get-PSAutorun:
+```powershell
+Get-PSAutorun -Artifacts MyCustom
 ```
 
 #### New-AutoRunsBaseLine
