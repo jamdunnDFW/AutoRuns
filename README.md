@@ -102,6 +102,10 @@ Register-PSAutorunArtifactProvider -Name MyCustom -ScriptBlock {
 Get-PSAutorun -Artifacts MyCustom
 ```
 
+- Timestamp formatting:
+  - Baseline serialization now uses ISO 8601 (yyyy-MM-dd HH:mm:ss.fff) in comments for DateTime values.
+  - Runtime objects still expose DateTime types (e.g., LastWriteTime); format as needed when exporting.
+
 #### New-AutoRunsBaseLine
 
 ```powershell
